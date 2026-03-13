@@ -1,46 +1,41 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import * as d3 from "d3";
-import * as topojson from "topojson-client";
+import { feature, mesh } from "topojson-client";
 
 const API_URL = "https://georisk-production.up.railway.app";
 const API_KEY = "demo-key-123";
 
 const COUNTRIES = [
-  { name: "Ukraine", iso: "UKR" }, { name: "Russia", iso: "RUS" },
-  { name: "Israel", iso: "ISR" }, { name: "Iran", iso: "IRN" },
-  { name: "Taiwan", iso: "TWN" }, { name: "North Korea", iso: "PRK" },
-  { name: "Sudan", iso: "SDN" }, { name: "Ethiopia", iso: "ETH" },
-  { name: "Myanmar", iso: "MMR" }, { name: "Venezuela", iso: "VEN" },
-  { name: "Pakistan", iso: "PAK" }, { name: "Haiti", iso: "HTI" },
-  { name: "Afghanistan", iso: "AFG" }, { name: "Syria", iso: "SYR" },
-  { name: "Iraq", iso: "IRQ" }, { name: "Libya", iso: "LBY" },
-  { name: "Yemen", iso: "YEM" }, { name: "Somalia", iso: "SOM" },
-  { name: "Mali", iso: "MLI" }, { name: "Niger", iso: "NER" },
-  { name: "China", iso: "CHN" }, { name: "United States", iso: "USA" },
-  { name: "France", iso: "FRA" }, { name: "Germany", iso: "DEU" },
-  { name: "Brazil", iso: "BRA" }, { name: "India", iso: "IND" },
-  { name: "Turkey", iso: "TUR" }, { name: "Saudi Arabia", iso: "SAU" },
-  { name: "Egypt", iso: "EGY" }, { name: "Mexico", iso: "MEX" },
+  { name: "Ukraine" }, { name: "Russia" }, { name: "Israel" },
+  { name: "Iran" }, { name: "Taiwan" }, { name: "North Korea" },
+  { name: "Sudan" }, { name: "Ethiopia" }, { name: "Myanmar" },
+  { name: "Venezuela" }, { name: "Pakistan" }, { name: "Haiti" },
+  { name: "Afghanistan" }, { name: "Syria" }, { name: "Iraq" },
+  { name: "Libya" }, { name: "Yemen" }, { name: "Somalia" },
+  { name: "China" }, { name: "United States" }, { name: "France" },
+  { name: "Germany" }, { name: "Brazil" }, { name: "India" },
+  { name: "Turkey" }, { name: "Saudi Arabia" }, { name: "Egypt" },
+  { name: "Mexico" }, { name: "Mali" }, { name: "Niger" },
 ];
 
 const ID_TO_NAME = {
-  804: "Ukraine", 643: "Russia", 376: "Israel", 364: "Iran",
-  158: "Taiwan", 408: "North Korea", 729: "Sudan", 231: "Ethiopia",
-  104: "Myanmar", 862: "Venezuela", 586: "Pakistan", 332: "Haiti",
-  4: "Afghanistan", 760: "Syria", 368: "Iraq", 434: "Libya",
-  887: "Yemen", 706: "Somalia", 466: "Mali", 562: "Niger",
-  156: "China", 840: "United States", 250: "France", 276: "Germany",
-  76: "Brazil", 356: "India", 792: "Turkey", 682: "Saudi Arabia",
-  818: "Egypt", 484: "Mexico",
+  804:"Ukraine",643:"Russia",376:"Israel",364:"Iran",
+  158:"Taiwan",408:"North Korea",729:"Sudan",231:"Ethiopia",
+  104:"Myanmar",862:"Venezuela",586:"Pakistan",332:"Haiti",
+  4:"Afghanistan",760:"Syria",368:"Iraq",434:"Libya",
+  887:"Yemen",706:"Somalia",466:"Mali",562:"Niger",
+  156:"China",840:"United States",250:"France",276:"Germany",
+  76:"Brazil",356:"India",792:"Turkey",682:"Saudi Arabia",
+  818:"Egypt",484:"Mexico",
 };
 
 const DIM_LABELS = {
-  armed_conflict: "Conflit armé",
-  political_instability: "Instabilité politique",
-  economic_collapse: "Risque économique",
-  sanctions_exposure: "Sanctions",
-  terrorism: "Terrorisme",
-  cyber_threat: "Menace cyber",
+  armed_conflict:"Conflit armé",
+  political_instability:"Instabilité politique",
+  economic_collapse:"Risque économique",
+  sanctions_exposure:"Sanctions",
+  terrorism:"Terrorisme",
+  cyber_threat:"Menace cyber",
 };
 
 function riskColor(score) {
@@ -60,89 +55,88 @@ function riskLabel(score) {
   return "FAIBLE";
 }
 
-// ─── World Map ────────────────────────────────────────────────────────────────
 function WorldMap({ scores, onCountryClick, selected }) {
   const svgRef = useRef(null);
   const containerRef = useRef(null);
-  const [worldData, setWorldData] = useState(null);
   const [tooltip, setTooltip] = useState(null);
 
   useEffect(() => {
-    fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
-      .then(r => r.json())
-      .then(setWorldData);
-  }, []);
+    const container = containerRef.current;
+    const svgEl = svgRef.current;
+    if (!container || !svgEl) return;
 
-  useEffect(() => {
-    if (!worldData || !svgRef.current || !containerRef.current) return;
-    const svg = d3.select(svgRef.current);
+    const width = container.clientWidth || 800;
+    const height = container.clientHeight || 450;
+
+    const svg = d3.select(svgEl)
+      .attr("width", width)
+      .attr("height", height);
+
     svg.selectAll("*").remove();
-
-    const width = containerRef.current.clientWidth;
-    const height = containerRef.current.clientHeight;
-
-    svg.attr("width", width).attr("height", height);
+    svg.append("rect").attr("width", width).attr("height", height).attr("fill", "#060d1a");
 
     const projection = d3.geoNaturalEarth1()
       .scale(width / 6.3)
       .translate([width / 2, height / 2]);
 
-    const path = d3.geoPath().projection(projection);
-    const countries = topojson.feature(worldData, worldData.objects.countries);
+    const pathGen = d3.geoPath().projection(projection);
 
-    svg.append("rect").attr("width", width).attr("height", height).attr("fill", "#060d1a");
+    fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
+      .then(r => r.json())
+      .then(world => {
+        const countries = feature(world, world.objects.countries);
 
-    const g = svg.append("g");
+        svg.append("path")
+          .datum(d3.geoGraticule()())
+          .attr("d", pathGen)
+          .attr("fill", "none")
+          .attr("stroke", "#ffffff06")
+          .attr("stroke-width", 0.5);
 
-    g.append("path")
-      .datum(d3.geoGraticule()())
-      .attr("d", path)
-      .attr("fill", "none")
-      .attr("stroke", "#ffffff05")
-      .attr("stroke-width", 0.5);
+        svg.selectAll(".c")
+          .data(countries.features)
+          .join("path")
+          .attr("class", "c")
+          .attr("d", pathGen)
+          .attr("fill", d => riskColor(scores[ID_TO_NAME[+d.id]]))
+          .attr("stroke", d => selected === ID_TO_NAME[+d.id] ? "#fff" : "#0d1e35")
+          .attr("stroke-width", d => selected === ID_TO_NAME[+d.id] ? 2 : 0.4)
+          .attr("opacity", d => ID_TO_NAME[+d.id] ? 1 : 0.5)
+          .style("cursor", d => ID_TO_NAME[+d.id] ? "pointer" : "default")
+          .on("mouseover", function(event, d) {
+            const name = ID_TO_NAME[+d.id];
+            if (!name) return;
+            d3.select(this).attr("opacity", 0.7);
+            const rect = container.getBoundingClientRect();
+            setTooltip({ name, score: scores[name], x: event.clientX - rect.left, y: event.clientY - rect.top });
+          })
+          .on("mousemove", function(event) {
+            const rect = container.getBoundingClientRect();
+            setTooltip(t => t ? { ...t, x: event.clientX - rect.left, y: event.clientY - rect.top } : null);
+          })
+          .on("mouseout", function(_, d) {
+            d3.select(this).attr("opacity", ID_TO_NAME[+d.id] ? 1 : 0.5);
+            setTooltip(null);
+          })
+          .on("click", (_, d) => {
+            const name = ID_TO_NAME[+d.id];
+            if (name) onCountryClick(name);
+          });
 
-    g.selectAll(".country")
-      .data(countries.features)
-      .join("path")
-      .attr("class", "country")
-      .attr("d", path)
-      .attr("fill", d => riskColor(scores[ID_TO_NAME[+d.id]]))
-      .attr("stroke", d => selected === ID_TO_NAME[+d.id] ? "#fff" : "#0d1e35")
-      .attr("stroke-width", d => selected === ID_TO_NAME[+d.id] ? 2 : 0.4)
-      .attr("opacity", d => ID_TO_NAME[+d.id] ? 1 : 0.5)
-      .style("cursor", d => ID_TO_NAME[+d.id] ? "pointer" : "default")
-      .on("mouseover", function (event, d) {
-        const name = ID_TO_NAME[+d.id];
-        if (!name) return;
-        d3.select(this).attr("opacity", 0.75);
-        const rect = containerRef.current.getBoundingClientRect();
-        setTooltip({ name, score: scores[name], x: event.clientX - rect.left, y: event.clientY - rect.top });
+        svg.append("path")
+          .datum(mesh(world, world.objects.countries, (a, b) => a !== b))
+          .attr("d", pathGen)
+          .attr("fill", "none")
+          .attr("stroke", "#0d1e35")
+          .attr("stroke-width", 0.3);
       })
-      .on("mousemove", function (event) {
-        const rect = containerRef.current.getBoundingClientRect();
-        setTooltip(t => t ? { ...t, x: event.clientX - rect.left, y: event.clientY - rect.top } : null);
-      })
-      .on("mouseout", function (event, d) {
-        d3.select(this).attr("opacity", ID_TO_NAME[+d.id] ? 1 : 0.5);
-        setTooltip(null);
-      })
-      .on("click", (_, d) => {
-        const name = ID_TO_NAME[+d.id];
-        if (name) onCountryClick(name);
-      });
+      .catch(err => console.error("Map load error:", err));
 
-    g.append("path")
-      .datum(topojson.mesh(worldData, worldData.objects.countries, (a, b) => a !== b))
-      .attr("d", path)
-      .attr("fill", "none")
-      .attr("stroke", "#0d1e35")
-      .attr("stroke-width", 0.3);
-
-  }, [worldData, scores, selected]);
+  }, [scores, selected, onCountryClick]);
 
   return (
     <div ref={containerRef} style={{ position: "relative", width: "100%", height: "100%" }}>
-      <svg ref={svgRef} style={{ display: "block" }} />
+      <svg ref={svgRef} style={{ display: "block", width: "100%", height: "100%" }} />
       {tooltip && (
         <div style={{
           position: "absolute", left: tooltip.x + 14, top: tooltip.y - 14,
@@ -160,29 +154,27 @@ function WorldMap({ scores, onCountryClick, selected }) {
   );
 }
 
-// ─── Score Ring ───────────────────────────────────────────────────────────────
 function ScoreRing({ score }) {
-  const r = 58, stroke = 10;
+  const r = 56, stroke = 10;
   const circ = 2 * Math.PI * r;
   const color = riskColor(score);
   return (
-    <div style={{ position: "relative", width: 144, height: 144, margin: "0 auto" }}>
-      <svg width="144" height="144" style={{ transform: "rotate(-90deg)", filter: `drop-shadow(0 0 12px ${color}55)` }}>
-        <circle cx="72" cy="72" r={r} fill="none" stroke="#1e293b" strokeWidth={stroke} />
-        <circle cx="72" cy="72" r={r} fill="none" stroke={color} strokeWidth={stroke}
+    <div style={{ position: "relative", width: 140, height: 140, margin: "0 auto" }}>
+      <svg width="140" height="140" style={{ transform: "rotate(-90deg)", filter: `drop-shadow(0 0 10px ${color}44)` }}>
+        <circle cx="70" cy="70" r={r} fill="none" stroke="#1e293b" strokeWidth={stroke} />
+        <circle cx="70" cy="70" r={r} fill="none" stroke={color} strokeWidth={stroke}
           strokeDasharray={`${(score / 100) * circ} ${circ}`} strokeLinecap="round"
-          style={{ transition: "stroke-dasharray 1.4s cubic-bezier(.4,0,.2,1), stroke 0.5s" }}
+          style={{ transition: "stroke-dasharray 1.4s cubic-bezier(.4,0,.2,1)" }}
         />
       </svg>
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ fontSize: 34, fontWeight: 900, color, lineHeight: 1, fontFamily: "'Syne', sans-serif" }}>{score}</div>
-        <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.15em", marginTop: 3 }}>/ 100</div>
+        <div style={{ fontSize: 32, fontWeight: 900, color, lineHeight: 1 }}>{score}</div>
+        <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.1em", marginTop: 3 }}>/ 100</div>
       </div>
     </div>
   );
 }
 
-// ─── App ──────────────────────────────────────────────────────────────────────
 export default function App() {
   const [scores, setScores] = useState({});
   const [selected, setSelected] = useState(null);
@@ -203,12 +195,12 @@ export default function App() {
       const res = await fetch(`${API_URL}/risk/${encodeURIComponent(country)}`, {
         headers: { "x-api-key": API_KEY }
       });
-      if (!res.ok) throw new Error("API error");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const result = await res.json();
       setData(result);
       setScores(s => ({ ...s, [country]: result.overall_score }));
-    } catch {
-      setError("Connexion à l'API échouée. Vérifie que ton service Railway est actif.");
+    } catch (e) {
+      setError(`Erreur API : ${e.message}. Vérifie que Railway est actif.`);
     } finally {
       setLoading(false);
     }
@@ -225,11 +217,12 @@ export default function App() {
     <div style={{
       height: "100vh", display: "flex", flexDirection: "column",
       background: "#060d1a", color: "#f1f5f9",
-      fontFamily: "'DM Sans', sans-serif", overflow: "hidden",
+      fontFamily: "system-ui, sans-serif", overflow: "hidden",
     }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Syne:wght@700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'DM Sans', system-ui, sans-serif; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 99px; }
         @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
@@ -241,17 +234,16 @@ export default function App() {
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "0 24px", height: 56, flexShrink: 0,
-        background: "#07101f", borderBottom: "1px solid #0f1e35",
-        zIndex: 100,
+        background: "#07101f", borderBottom: "1px solid #0f1e35", zIndex: 100,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 22, letterSpacing: "-0.03em" }}>
+          <span style={{ fontWeight: 900, fontSize: 20, letterSpacing: "-0.03em" }}>
             GEO<span style={{ color: "#3b82f6" }}>PULSE</span>
           </span>
           <span style={{
             padding: "2px 8px", borderRadius: 4,
             background: "#0f2d1a", border: "1px solid #166534",
-            fontSize: 10, color: "#22c55e", fontWeight: 600, letterSpacing: "0.08em",
+            fontSize: 10, color: "#22c55e", fontWeight: 700, letterSpacing: "0.08em",
           }}>● LIVE</span>
         </div>
 
@@ -266,16 +258,12 @@ export default function App() {
             minWidth: 230, justifyContent: "space-between", transition: "all 0.2s",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 18 }}>🌍</span>
+              <span>🌍</span>
               <span style={{ color: selected ? "#fff" : "#475569" }}>
                 {selected || "Sélectionner un pays"}
               </span>
             </div>
-            <span style={{
-              color: "#3b82f6", fontSize: 9,
-              transform: dropdownOpen ? "rotate(180deg)" : "none",
-              transition: "transform 0.2s",
-            }}>▼</span>
+            <span style={{ color: "#3b82f6", fontSize: 9, transform: dropdownOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>▼</span>
           </button>
 
           {dropdownOpen && (
@@ -309,12 +297,12 @@ export default function App() {
                       border: "none", borderBottom: "1px solid #0a1420",
                       padding: "10px 16px", cursor: "pointer",
                       display: "flex", justifyContent: "space-between", alignItems: "center",
-                      transition: "background 0.1s",
+                      transition: "background 0.1s", color: "#94a3b8",
                     }}
                       onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "#0d1830"; }}
                       onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
                     >
-                      <span style={{ fontSize: 13, color: isActive ? "#fff" : "#94a3b8", fontWeight: isActive ? 600 : 400 }}>{c.name}</span>
+                      <span style={{ fontSize: 13, fontWeight: isActive ? 600 : 400, color: isActive ? "#fff" : "#94a3b8" }}>{c.name}</span>
                       {s !== undefined && (
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <div style={{ width: 8, height: 8, borderRadius: "50%", background: riskColor(s), boxShadow: `0 0 8px ${riskColor(s)}` }} />
@@ -349,16 +337,16 @@ export default function App() {
           }}>
             <div style={{ fontSize: 9, color: "#334155", letterSpacing: "0.12em", marginBottom: 8 }}>NIVEAU DE RISQUE</div>
             {[
-              { label: "Critique", color: "#dc2626", range: "80–100" },
-              { label: "Élevé", color: "#ea580c", range: "60–79" },
-              { label: "Modéré-haut", color: "#ca8a04", range: "40–59" },
-              { label: "Modéré", color: "#65a30d", range: "20–39" },
-              { label: "Faible", color: "#16a34a", range: "0–19" },
-            ].map(l => (
-              <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
-                <div style={{ width: 10, height: 10, borderRadius: 2, background: l.color }} />
-                <span style={{ fontSize: 11, color: "#64748b" }}>{l.label}</span>
-                <span style={{ fontSize: 10, color: "#1e3a5f", marginLeft: "auto", paddingLeft: 12 }}>{l.range}</span>
+              ["Critique", "#dc2626", "80–100"],
+              ["Élevé", "#ea580c", "60–79"],
+              ["Modéré-haut", "#ca8a04", "40–59"],
+              ["Modéré", "#65a30d", "20–39"],
+              ["Faible", "#16a34a", "0–19"],
+            ].map(([label, c, range]) => (
+              <div key={label} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                <div style={{ width: 10, height: 10, borderRadius: 2, background: c }} />
+                <span style={{ fontSize: 11, color: "#64748b" }}>{label}</span>
+                <span style={{ fontSize: 10, color: "#1e3a5f", marginLeft: "auto", paddingLeft: 12 }}>{range}</span>
               </div>
             ))}
           </div>
@@ -367,7 +355,7 @@ export default function App() {
             <div style={{
               position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)",
               background: "#07101fcc", border: "1px solid #1e3a5f",
-              borderRadius: 10, padding: "10px 18px", backdropFilter: "blur(8px)",
+              borderRadius: 10, padding: "10px 18px",
               fontSize: 12, color: "#3b82f6", pointerEvents: "none", whiteSpace: "nowrap",
             }}>
               👆 Clique sur un pays ou utilise le menu déroulant
@@ -376,32 +364,14 @@ export default function App() {
         </div>
 
         {/* Side panel */}
-        <div style={{
-          borderLeft: "1px solid #0f1e35", background: "#07101f",
-          overflowY: "auto", display: "flex", flexDirection: "column",
-        }}>
+        <div style={{ borderLeft: "1px solid #0f1e35", background: "#07101f", overflowY: "auto" }}>
 
           {!selected && !loading && (
-            <div style={{
-              flex: 1, display: "flex", flexDirection: "column",
-              alignItems: "center", justifyContent: "center",
-              gap: 14, padding: 32, textAlign: "center",
-            }}>
-              <div style={{ fontSize: 56 }}>🌐</div>
-              <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 800, color: "#1e3a5f" }}>
-                Intelligence Géopolitique
-              </div>
+            <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, padding: 32, textAlign: "center" }}>
+              <div style={{ fontSize: 52 }}>🌐</div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: "#1e3a5f" }}>Intelligence Géopolitique</div>
               <div style={{ fontSize: 12, color: "#0f2040", lineHeight: 1.8, maxWidth: 260 }}>
                 Sélectionne un pays pour obtenir une analyse IA complète : score de risque, dimensions, déclencheurs et perspectives.
-              </div>
-              <div style={{
-                marginTop: 8, padding: "12px 18px",
-                background: "#0a1628", border: "1px solid #1e293b", borderRadius: 10,
-                fontSize: 11, color: "#1e3a5f", lineHeight: 2, textAlign: "left",
-              }}>
-                <span style={{ color: "#3b82f6" }}>GET</span> /risk/Ukraine<br />
-                <span style={{ color: "#3b82f6" }}>POST</span> /risk/batch<br />
-                <span style={{ color: "#3b82f6" }}>GET</span> /risk/global/trending
               </div>
             </div>
           )}
@@ -409,20 +379,15 @@ export default function App() {
           {loading && (
             <div style={{ padding: 24 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 28 }}>
-                <div style={{
-                  width: 16, height: 16, border: "2px solid #3b82f6",
-                  borderTopColor: "transparent", borderRadius: "50%",
-                  animation: "spin 0.8s linear infinite",
-                }} />
+                <div style={{ width: 16, height: 16, border: "2px solid #3b82f6", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
                 <span style={{ color: "#3b82f6", fontSize: 13 }}>Analyse de {selected}...</span>
               </div>
-              {[150, "80%", "60%", "100%", "70%", "90%", "50%"].map((w, i) => (
+              {[140, "80%", "60%", "100%", "70%"].map((w, i) => (
                 <div key={i} style={{
-                  height: i === 0 ? 150 : 11, width: w, marginBottom: 14,
+                  height: i === 0 ? 140 : 11, width: w, marginBottom: 14,
                   borderRadius: i === 0 ? "50%" : 6,
                   background: "linear-gradient(90deg,#1e293b 25%,#263447 50%,#1e293b 75%)",
-                  backgroundSize: "200% 100%",
-                  animation: "shimmer 1.5s infinite",
+                  backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite",
                   ...(i === 0 ? { margin: "0 auto 24px" } : {}),
                 }} />
               ))}
@@ -431,56 +396,27 @@ export default function App() {
 
           {error && !loading && (
             <div style={{ padding: 24 }}>
-              <div style={{
-                background: "#1f0a0a", border: "1px solid #7f1d1d",
-                borderRadius: 10, padding: 14, color: "#fca5a5", fontSize: 13, lineHeight: 1.6,
-              }}>⚠ {error}</div>
+              <div style={{ background: "#1f0a0a", border: "1px solid #7f1d1d", borderRadius: 10, padding: 14, color: "#fca5a5", fontSize: 13, lineHeight: 1.6 }}>⚠ {error}</div>
             </div>
           )}
 
           {data && !loading && (
             <div style={{ padding: 20, animation: "fadeUp 0.4s ease" }}>
-
-              {/* Title */}
               <div style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 9, color: "#1e3a5f", letterSpacing: "0.18em", marginBottom: 6 }}>ANALYSE EN TEMPS RÉEL</div>
-                <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 10 }}>
-                  {data.country}
-                </div>
+                <div style={{ fontSize: 26, fontWeight: 900, letterSpacing: "-0.02em", marginBottom: 10 }}>{data.country}</div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <span style={{
-                    padding: "4px 12px", borderRadius: 7,
-                    background: `${color}15`, border: `1px solid ${color}40`,
-                    fontSize: 11, fontWeight: 700, color, letterSpacing: "0.06em",
-                  }}>{data.risk_level}</span>
-                  {trend && (
-                    <span style={{
-                      padding: "4px 12px", borderRadius: 7,
-                      background: "#0a1628", border: "1px solid #1e293b",
-                      fontSize: 11, color: trend.c, fontWeight: 600,
-                    }}>{trend.icon} {trend.label}</span>
-                  )}
-                  <span style={{
-                    padding: "4px 12px", borderRadius: 7,
-                    background: "#0a1628", border: "1px solid #1e293b",
-                    fontSize: 11, color: "#475569",
-                  }}>IA {data.confidence}%</span>
+                  <span style={{ padding: "4px 12px", borderRadius: 7, background: `${color}15`, border: `1px solid ${color}40`, fontSize: 11, fontWeight: 700, color, letterSpacing: "0.06em" }}>{data.risk_level}</span>
+                  {trend && <span style={{ padding: "4px 12px", borderRadius: 7, background: "#0a1628", border: "1px solid #1e293b", fontSize: 11, color: trend.c, fontWeight: 600 }}>{trend.icon} {trend.label}</span>}
+                  <span style={{ padding: "4px 12px", borderRadius: 7, background: "#0a1628", border: "1px solid #1e293b", fontSize: 11, color: "#475569" }}>IA {data.confidence}%</span>
                 </div>
               </div>
 
-              {/* Score */}
-              <div style={{
-                background: "#0a1628", border: `1px solid ${color}25`,
-                borderRadius: 14, padding: "20px 16px", marginBottom: 14,
-                boxShadow: `inset 0 0 50px ${color}06`,
-              }}>
+              <div style={{ background: "#0a1628", border: `1px solid ${color}25`, borderRadius: 14, padding: "20px 16px", marginBottom: 14 }}>
                 <ScoreRing score={data.overall_score} />
-                <div style={{ textAlign: "center", marginTop: 10, fontSize: 11, color: "#334155" }}>
-                  Score composite de risque géopolitique
-                </div>
+                <div style={{ textAlign: "center", marginTop: 10, fontSize: 11, color: "#334155" }}>Score composite de risque géopolitique</div>
               </div>
 
-              {/* Dimensions */}
               <div style={{ background: "#0a1628", border: "1px solid #0f1e35", borderRadius: 14, padding: 16, marginBottom: 14 }}>
                 <div style={{ fontSize: 9, color: "#334155", letterSpacing: "0.12em", marginBottom: 14 }}>DIMENSIONS DE RISQUE</div>
                 {Object.entries(data.dimensions || {}).map(([k, v]) => {
@@ -492,37 +428,23 @@ export default function App() {
                         <span style={{ fontSize: 11, fontWeight: 700, color: c }}>{v}</span>
                       </div>
                       <div style={{ background: "#1e293b", height: 5, borderRadius: 99 }}>
-                        <div style={{
-                          width: `${v}%`, height: "100%",
-                          background: `linear-gradient(90deg,${c}77,${c})`,
-                          borderRadius: 99, transition: "width 1.3s cubic-bezier(.4,0,.2,1)",
-                        }} />
+                        <div style={{ width: `${v}%`, height: "100%", background: `linear-gradient(90deg,${c}77,${c})`, borderRadius: 99, transition: "width 1.3s cubic-bezier(.4,0,.2,1)" }} />
                       </div>
                     </div>
                   );
                 })}
               </div>
 
-              {/* Triggers */}
               <div style={{ background: "#0a1628", border: "1px solid #0f1e35", borderRadius: 14, padding: 16, marginBottom: 14 }}>
                 <div style={{ fontSize: 9, color: "#334155", letterSpacing: "0.12em", marginBottom: 12 }}>FACTEURS DÉCLENCHEURS</div>
                 {data.key_triggers?.map((t, i) => (
-                  <div key={i} style={{
-                    display: "flex", gap: 10, alignItems: "flex-start",
-                    padding: "8px 0",
-                    borderBottom: i < data.key_triggers.length - 1 ? "1px solid #0a1420" : "none",
-                  }}>
-                    <div style={{
-                      width: 22, height: 22, borderRadius: 6, flexShrink: 0,
-                      background: `${color}15`, color, fontSize: 10, fontWeight: 800,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>{i + 1}</div>
+                  <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 0", borderBottom: i < data.key_triggers.length - 1 ? "1px solid #0a1420" : "none" }}>
+                    <div style={{ width: 22, height: 22, borderRadius: 6, flexShrink: 0, background: `${color}15`, color, fontSize: 10, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{i + 1}</div>
                     <span style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.65 }}>{t}</span>
                   </div>
                 ))}
               </div>
 
-              {/* Outlook */}
               <div style={{ background: "#0a1628", border: "1px solid #0f1e35", borderRadius: 14, padding: 16 }}>
                 <div style={{ fontSize: 9, color: "#334155", letterSpacing: "0.12em", marginBottom: 8 }}>PERSPECTIVES 30 JOURS</div>
                 <p style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.75, marginBottom: 14 }}>{data.outlook_30_days}</p>
